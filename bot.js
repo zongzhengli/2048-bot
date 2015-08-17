@@ -2,53 +2,72 @@
 
     // Constants
     var GRID_SIZE = 4;
+    var PROB_2 = 0.9;
     var MOVE_UP = {
         drow: -1,
         dcol: 0,
         dir: 0,
-        keyCode: 38
+        keyCode: 38,
+        key: 'Up'
     };
     var MOVE_DOWN = {
         drow: 1,
         dcol: 0,
         dir: 1,
-        keyCode: 40
+        keyCode: 40,
+        key: 'Down'
     };
     var MOVE_LEFT = {
         drow: 0,
         dcol: -1,
         dir: 0,
-        keyCode: 37
+        keyCode: 37,
+        key: 'Left'
     };
     var MOVE_RIGHT = {
         drow: 0,
         dcol: 1,
         dir: 1,
-        keyCode: 39
+        keyCode: 39,
+        key: 'Right'
     };
 
     //*
     setInterval(function () {
         nextMove();
-    }, 10);
+    }, 5);
     /*/
     nextMove();
     //*/
 
+    var games = 0;
     var bestScore = 0;
-    var largestTile = 0;
+    var averageScore = 0;
+    var bestLargestTile = 0;
+    var averageLargestTile = 0;
+
     setInterval(function () {
         if (isGameOver()) {
             var score = getScore();
             bestScore = Math.max(bestScore, score);
 
             var tileList = getTileList();
-            for (var i = 0 ; i < tileList.length; i++) {
+            var largestTile = 0;
+            for (var i = 0 ; i < tileList.length; i++)
                 largestTile = Math.max(largestTile, tileList[i].num);
-            }
+            bestLargestTile = Math.max(bestLargestTile, largestTile);
 
-            console.log('Best score     ' + bestScore + '\n' +
-                        'Largest tile   ' + largestTile + '\n' +
+            averageScore = (averageScore * games + score) / (games + 1);
+            averageLargestTile = (averageLargestTile * games + largestTile) / (games + 1);
+            games++;
+
+            console.log('Game                   ' + games + '\n' +
+                        'Score                  ' + score + '\n' +
+                        'Largest tile           ' + largestTile + '\n' +
+                        'Average score          ' + Math.round(averageScore) + '\n' +
+                        'Average largest tile   ' + Math.round(averageLargestTile) + '\n' +
+                        'Best score             ' + bestScore + '\n' +
+                        'Best largest tile      ' + bestLargestTile + '\n' +
                         '\n');
             retry();
         }
@@ -66,11 +85,94 @@
             set(tileGrid, tile.row, tile.col, tile.num);
         }
 
-        var keyCodes = [ 37, 38, 39, 40 ];
-        var keyIndex = Math.floor(4 * Math.random());
-        var keyCode = keyCodes[keyIndex];
+        var moves = [ MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN ];
+        var beta = Number.NEGATIVE_INFINITY;
+        var bestMove = MOVE_LEFT;
 
-        pressKey(keyCode);
+        for (var i = 0; i < moves.length; i++) {
+            var copyGrid = copy(tileGrid);
+            var move = moves[i];
+
+            if (make(copyGrid, move)) {
+                var value = search(copyGrid, 0);
+                if (value > beta) {
+                    beta = value;
+                    bestMove = move;
+                }
+            }
+        }
+
+        //var moveIndex = Math.floor(4 * Math.random());
+        //var move = moves[moveIndex];
+        //print(tileGrid);
+        //make(tileGrid, bestMove);
+        //print(tileGrid);
+
+        pressKey(bestMove);
+    }
+
+    function search(tileGrid, depth) {
+        if (depth <= 0)
+            return evaluate(tileGrid);
+
+        var moves = [ MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN ];
+        var beta = Number.NEGATIVE_INFINITY;
+
+        for (var i = 0; i < moves.length; i++) {
+            var copyGrid = copy(tileGrid);
+            var move = moves[i];
+
+            if (make(copyGrid, move)) {
+                var value = search(copyGrid, depth - 1);
+                if (value > beta) {
+                    beta = value;
+                }
+            }
+        }
+
+        return beta;
+    }
+
+    function evaluate(tileGrid) {
+        var value = 0;
+        var center = (GRID_SIZE - 1) / 2;
+        var largestTile = 0;
+
+        for (var r = 0; r < GRID_SIZE; r++) {
+            for (var c = 0; c < GRID_SIZE; c++) {
+                var tile = get(tileGrid, r, c);
+                if (tile) {
+                    var dist = Math.abs(r - center) + Math.abs(c - center);
+                    value += dist * tile;
+                    largestTile = Math.max(largestTile, tile);
+                }
+            }
+        }
+
+        value += largestTile;
+
+        for (var r = 0; r < GRID_SIZE - 1; r++) {
+            for (var c = 0; c < GRID_SIZE - 1; c++) {
+                var tile = get(tileGrid, r, c);
+                if (tile) {
+                    var adjTile = get(tileGrid, r, c + 1);
+                    if (adjTile) {
+                        var ratio = Math.max(tile / adjTile, adjTile / tile);
+                        var delta = ratio - 1;
+                        value -= delta * 15;
+                    }
+
+                    adjTile = get(tileGrid, r + 1, c);
+                    if (adjTile) {
+                        var ratio = Math.max(tile / adjTile, adjTile / tile);
+                        var delta = ratio - 1;
+                        value -= delta * 15;
+                    }
+                }
+            }
+        }
+
+        return value;
     }
 
     function get(grid, row, col) {
@@ -113,6 +215,8 @@
         var end = (1 - move.dir) * (GRID_SIZE + 1) - 1;
         var inc = 1 - 2 * move.dir;
 
+        var anyMoved = false;
+
         for (var r = start; r != end; r += inc) {
             for (var c = start; c != end; c += inc) {
                 if (get(tileGrid, r, c)) {
@@ -127,10 +231,12 @@
                         if (!target) {
                             set(tileGrid, newr, newc, value);
                             set(tileGrid, oldr, oldc, 0);
+                            anyMoved = true;
                         }
                         else if (target === value) {
                             set(tileGrid, newr, newc, 2 * value);
                             set(tileGrid, oldr, oldc, 0);
+                            anyMoved = true;
                             break;
                         }
                         oldr = newr;
@@ -142,11 +248,27 @@
             }
         }
 
+        if (!anyMoved)
+            return false;
 
-    }
+        var numEmpty = 0;
+        for (var i = 0; i < tileGrid.length; i++) {
+            if (!tileGrid[i])
+                numEmpty++;
+        }
+        if (numEmpty === 0)
+            return false;
 
-    function search() {
-
+        for (var i = 0; i < tileGrid.length; i++) {
+            if (!tileGrid[i]) {
+                var p = 1 / numEmpty;
+                if (Math.random() < p) {
+                    tileGrid[i] = Math.random() < PROB_2 ? 2 : 4;
+                    return true;
+                }
+                else numEmpty--;
+            }
+        }
     }
 
     function getTileList() {
@@ -175,14 +297,7 @@
         return list;
     }
 
-    function pressKey(keyCode) {
-        var keyMap = {};
-        keyMap[37] = 'Left';
-        keyMap[38] = 'Up';
-        keyMap[39] = 'Right';
-        keyMap[40] = 'Down';
-        var key = keyMap[keyCode];
-
+    function pressKey(move) {
         var event = new Event("keydown", {
             bubbles: true,
             cancelable: true
@@ -194,14 +309,14 @@
         event.defaultPrevented = false;
         event.eventPhase = 3;
         event.isTrusted = true;
-        event.key = key;
-        event.keyCode = keyCode;
+        event.key = move.key;
+        event.keyCode = move.keyCode;
         event.locale = 'en-CA';
         event.location = 0;
         event.metaKey = false;
         event.repeat = false;
         event.shiftKey = false;
-        event.which = keyCode;
+        event.which = move.keyCode;
 
         document.body.dispatchEvent(event);
     }

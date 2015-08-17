@@ -35,7 +35,7 @@
     //*
     setInterval(function () {
         nextMove();
-    }, 5);
+    }, 50);
     /*/
     nextMove();
     //*/
@@ -85,38 +85,24 @@
             set(tileGrid, tile.row, tile.col, tile.num);
         }
 
-        var moves = [ MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN ];
-        var beta = Number.NEGATIVE_INFINITY;
-        var bestMove = MOVE_LEFT;
+        var move = search(tileGrid, 2, true);
 
-        for (var i = 0; i < moves.length; i++) {
-            var copyGrid = copy(tileGrid);
-            var move = moves[i];
-
-            if (make(copyGrid, move)) {
-                var value = search(copyGrid, 0);
-                if (value > beta) {
-                    beta = value;
-                    bestMove = move;
-                }
-            }
-        }
-
-        //var moveIndex = Math.floor(4 * Math.random());
-        //var move = moves[moveIndex];
-        //print(tileGrid);
-        //make(tileGrid, bestMove);
-        //print(tileGrid);
-
-        pressKey(bestMove);
+        //*
+        pressKey(move);
+        /*/
+        print(tileGrid);
+        evaluate(tileGrid, true);
+        //*/
     }
 
-    function search(tileGrid, depth) {
+    function search(tileGrid, depth, root) {
         if (depth <= 0)
             return evaluate(tileGrid);
 
+        var MOVE_ITERATIONS = 10;
         var moves = [ MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN ];
         var beta = Number.NEGATIVE_INFINITY;
+        var betaMove = MOVE_LEFT;
 
         for (var i = 0; i < moves.length; i++) {
             var copyGrid = copy(tileGrid);
@@ -124,55 +110,150 @@
 
             if (make(copyGrid, move)) {
                 var value = search(copyGrid, depth - 1);
+
+                for (var k = 1; k < MOVE_ITERATIONS; k++) {
+                    var copyGrid = copy(tileGrid);
+                    make(copyGrid, move);
+                    //value = (value * k + search(copyGrid, depth - 1)) / (k + 1);
+                    value = Math.min(value, search(copyGrid, depth - 1));
+                }
+
                 if (value > beta) {
                     beta = value;
+                    betaMove = move;
                 }
             }
+
         }
 
-        return beta;
+        return root ? betaMove : beta;
     }
 
-    function evaluate(tileGrid) {
+    function evaluate(tileGrid, printComponents) {
+        var EDGE_WEIGHT = 1;
+        var NUM_EMPTY_WEIGHT = 1;
+        var ADJ_WEIGHT = 0.1;
+        var ADJ_DIFF_WEIGHT = -0.5;
+        var INSULATION_WEIGHT = -10;
+
         var value = 0;
-        var center = (GRID_SIZE - 1) / 2;
-        var largestTile = 0;
+
+        var numEmpty = 0;
+        /*
+        for (var r = 0; r < GRID_SIZE; r++) {
+            for (var c = 0; c < GRID_SIZE; c++) {
+                var tileNum = get(tileGrid, r, c);
+                if (tileNum) {
+                    var dist = Math.pow(r - center, 2) + Math.pow(c - center, 2);
+                    distValue += dist * tileNum;
+
+                    if (tileNum > largest.num) {
+                        second = largest;
+                        largest = {
+                            num: tileNum,
+                            row: r,
+                            col: c
+                        }
+                    }
+                    else if (tileNum > second.num) {
+                        second = {
+                            num: tileNum,
+                            row: r,
+                            col: c
+                        }
+                    }
+                }
+                else numEmpty++;
+            }
+        }
+        //*/
+
+        var edgeValue = 0;
+        for (var i = 0; i < GRID_SIZE; i++) {
+            var tileNum = get(tileGrid, i, 0);
+            if (tileNum)
+                edgeValue += tileNum;
+
+            tileNum = get(tileGrid, i, GRID_SIZE - 1);
+            if (tileNum)
+                edgeValue += tileNum;
+
+            tileNum = get(tileGrid, 0, i);
+            if (tileNum)
+                edgeValue += tileNum;
+
+            tileNum = get(tileGrid, GRID_SIZE - 1, i);
+            if (tileNum)
+                edgeValue += tileNum;
+        }
+
+        var numEmptyValue = numEmpty;
+
+        var adjValue = 0;
+        var adjDiffValue = 0;
+        var insulationValue = 0;
 
         for (var r = 0; r < GRID_SIZE; r++) {
             for (var c = 0; c < GRID_SIZE; c++) {
-                var tile = get(tileGrid, r, c);
-                if (tile) {
-                    var dist = Math.abs(r - center) + Math.abs(c - center);
-                    value += dist * tile;
-                    largestTile = Math.max(largestTile, tile);
+                var tileNum = get(tileGrid, r, c);
+                if (tileNum) {
+                    if (inBounds(r, c + 1)) {
+                        var adjNum = get(tileGrid, r, c + 1);
+                        if (adjNum) {
+                            adjValue += tileNum + adjNum;
+                            adjDiffValue += levelDifference(tileNum, adjNum);
+
+                            if (inBounds(r, c + 2)) {
+                                var thirdNum = get(tileGrid, r, c + 2);
+                                if (thirdNum && levelDifference(tileNum, thirdNum) <= 1) {
+                                    var averageNum = (tileNum + thirdNum) / 2;
+                                    insulationValue += levelDifference(averageNum, adjNum) * Math.log(averageNum);
+                                }
+                            }
+                        }
+                    }
+
+                    if (inBounds(r + 1, c)) {
+                        adjNum = get(tileGrid, r + 1, c);
+                        if (adjNum) {
+                            adjValue += tileNum + adjNum;
+                            adjDiffValue += levelDifference(tileNum, adjNum);
+
+                            if (inBounds(r + 2, c)) {
+                                var thirdNum = get(tileGrid, r + 2, c);
+                                if (thirdNum && levelDifference(tileNum, thirdNum) <= 1) {
+                                    var averageNum = (tileNum + thirdNum) / 2;
+                                    insulationValue += levelDifference(averageNum, adjNum) * Math.log(averageNum);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        value += largestTile;
+        value += EDGE_WEIGHT * edgeValue;
+        value += NUM_EMPTY_WEIGHT * numEmptyValue;
+        value += ADJ_WEIGHT * adjValue;
+        value += ADJ_DIFF_WEIGHT * adjDiffValue;
+        value += INSULATION_WEIGHT * insulationValue;
 
-        for (var r = 0; r < GRID_SIZE - 1; r++) {
-            for (var c = 0; c < GRID_SIZE - 1; c++) {
-                var tile = get(tileGrid, r, c);
-                if (tile) {
-                    var adjTile = get(tileGrid, r, c + 1);
-                    if (adjTile) {
-                        var ratio = Math.max(tile / adjTile, adjTile / tile);
-                        var delta = ratio - 1;
-                        value -= delta * 15;
-                    }
-
-                    adjTile = get(tileGrid, r + 1, c);
-                    if (adjTile) {
-                        var ratio = Math.max(tile / adjTile, adjTile / tile);
-                        var delta = ratio - 1;
-                        value -= delta * 15;
-                    }
-                }
-            }
+        if (printComponents) {
+            console.log('EVALUATION     ' + value + '\n' +
+                        '  edge         ' + (EDGE_WEIGHT * edgeValue) + '\n' +
+                        '  numEmpty     ' + (NUM_EMPTY_WEIGHT * numEmptyValue) + '\n' +
+                        '  adj          ' + (ADJ_WEIGHT * adjValue) + '\n' +
+                        '  adjDiff      ' + (ADJ_DIFF_WEIGHT * adjDiffValue) + '\n' +
+                        '  insulation   ' + (INSULATION_WEIGHT * insulationValue) + '\n'
+            );
         }
 
         return value;
+    }
+
+    function levelDifference(num1, num2) {
+        var ratio = Math.max(num1 / num2, num2 / num1);
+        return Math.log(ratio) * 1.44269504;
     }
 
     function get(grid, row, col) {
@@ -234,7 +315,7 @@
                             anyMoved = true;
                         }
                         else if (target === value) {
-                            set(tileGrid, newr, newc, 2 * value);
+                            set(tileGrid, newr, newc, -2 * value);
                             set(tileGrid, oldr, oldc, 0);
                             anyMoved = true;
                             break;
@@ -253,7 +334,9 @@
 
         var numEmpty = 0;
         for (var i = 0; i < tileGrid.length; i++) {
-            if (!tileGrid[i])
+            if (tileGrid[i] < 0)
+                tileGrid[i] *= -1;
+            else if (!tileGrid[i])
                 numEmpty++;
         }
         if (numEmpty === 0)

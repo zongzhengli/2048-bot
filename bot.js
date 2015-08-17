@@ -339,8 +339,6 @@
             else if (!tileGrid[i])
                 numEmpty++;
         }
-        if (numEmpty === 0)
-            return false;
 
         for (var i = 0; i < tileGrid.length; i++) {
             if (!tileGrid[i]) {

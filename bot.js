@@ -5,7 +5,6 @@
 
     // Search constants.
     var SEARCH_DEPTH = 3;
-    var MOVE_ITERATIONS = 10;
     var SEARCH_TIME = 100;
     var RETRY_TIME = 1000;
     var ACCEPT_DEFEAT_VALUE = -999999;
@@ -107,6 +106,8 @@
                         'Best score             ' + bestScore + '\n' +
                         'Best largest tile      ' + bestLargestTile + '\n' +
                         '\n');
+
+            transpositionTable = {};
             tryAgain();
         }
     }, RETRY_TIME);
@@ -148,12 +149,14 @@
 
             if (make(copyGrid, move)) {
                 bestMove = bestMove || move;
-                var value = search(copyGrid, depth - 1, alpha);
+                var value = Number.POSITIVE_INFINITY;
 
-                for (var k = 1; value > alpha && k < MOVE_ITERATIONS; k++) {
-                    copyGrid = copy(grid);
-                    make(copyGrid, move);
-                    value = Math.min(value, search(copyGrid, depth - 1, alpha));
+                for (var j = 0; value > alpha && j < copyGrid.length; j++) {
+                    if (!copyGrid[j]) {
+                        copyGrid[j] = 2;
+                        value = Math.min(value, search(copyGrid, depth - 1, alpha));
+                        copyGrid[j] = 0;
+                    }
                 }
 
                 if (value > alpha) {
@@ -165,9 +168,7 @@
         }
 
         if (!bestMove) {
-            if (root)
-                throw 'No moves possible at root.';
-            return ACCEPT_DEFEAT_VALUE + evaluate(grid);
+            return root ? MOVE_LEFT : ACCEPT_DEFEAT_VALUE + evaluate(grid);
         }
 
         transpositionTable[key] = {
@@ -345,7 +346,7 @@
      * Makes the given move on the grid, randomly selects new tile insertion location.
      * @param grid: flat array representation of game grid.
      * @param move: object containing move vectors.
-     * @return whether the move was successfully made.
+     * @return whether the move was made successfully.
      */
     function make(grid, move) {
         var start = move.dir * (GRID_SIZE - 1);
@@ -397,17 +398,9 @@
         }
 
         if (numEmpty === 0)
-            return false;
+            throw 'No empty squares after making move.';
 
-        for (var i = 0; i < grid.length; i++) {
-            if (!grid[i]) {
-                var p = 1 / numEmpty--;
-                if (Math.random() < p) {
-                    grid[i] = Math.random() < PROB_2 ? 2 : 4;
-                    return true;
-                }
-            }
-        }
+        return true;
     }
 
     /**

@@ -1,18 +1,21 @@
 (function () {
 
-    // Constants
+    // Game constants.
     var GRID_SIZE = 4;
     var PROB_2 = 0.9;
 
+    // Search constants.
     var SEARCH_DEPTH = 3;
-    var MOVE_ITERATIONS = 2;
+    var MOVE_ITERATIONS = 5;
 
+    // Evaluation constants.
     var EDGE_WEIGHT = 1;
     var NUM_EMPTY_WEIGHT = 1;
     var ADJ_WEIGHT = 0.1;
     var ADJ_DIFF_WEIGHT = -0.5;
     var INSULATION_WEIGHT = -10;
 
+    // Shared constants.
     var MOVE_UP = {
         drow: -1,
         dcol: 0,
@@ -42,12 +45,26 @@
         key: 'Right'
     };
 
+    // Initialize hash tables.
+    var transpositionTable = {};
+    var keyTable = {};
+    for (var r = 0; r < GRID_SIZE; r++) {
+        for (var c = 0; c < GRID_SIZE; c++) {
+            for (var t = 2; t <= 8192; t *= 2) {
+                keyTable[getTileKey(r, c, t)] = Math.round(0xffffffff * Math.random());
+            }
+            keyTable[getTileKey(r, c, 0)] = 0;
+        }
+    }
+
     //*
     setInterval(function () {
         nextMove();
     }, 50);
     /*/
-    nextMove();
+    var grid = getGrid();
+    print(grid);
+    evaluate(grid, true);
     //*/
 
     var games = 0;
@@ -61,10 +78,10 @@
             var score = getScore();
             bestScore = Math.max(bestScore, score);
 
-            var tileList = getTileList();
+            var grid = getGrid();
             var largestTile = 0;
-            for (var i = 0 ; i < tileList.length; i++)
-                largestTile = Math.max(largestTile, tileList[i].num);
+            for (var i = 0 ; i < grid.length; i++)
+                largestTile = Math.max(largestTile, grid[i]);
             bestLargestTile = Math.max(bestLargestTile, largestTile);
 
             averageScore = (averageScore * games + score) / (games + 1);
@@ -87,24 +104,9 @@
      * Chooses and the next move and plays it.
      */
     function nextMove() {
-        var tileList = getTileList();
-        var grid = new Array(GRID_SIZE * GRID_SIZE);
-        for (var i = 0; i < grid.length; i++) {
-            grid[i] = 0;
-        }
-        for (var i = 0; i < tileList.length; i++) {
-            var tile = tileList[i];
-            set(grid, tile.row, tile.col, tile.num);
-        }
-
-        var move = search(grid, SEARCH_DEPTH, true);
-
-        //*
+        var grid = getGrid();
+        var move = search(grid, SEARCH_DEPTH, Number.NEGATIVE_INFINITY, true);
         pressKey(move);
-        /*/
-        print(grid);
-        evaluate(grid, true);
-        //*/
     }
 
     /**
@@ -114,37 +116,47 @@
      * @param root: whether to treat the node as the root node.
      * @return best move at root nodes, value of best move at other nodes.
      */
-    function search(grid, depth, root) {
+    function search(grid, depth, alpha, root) {
         if (depth <= 0)
             return evaluate(grid);
 
+        // Hash probe
+        var entry = transpositionTable[getGridKey(grid)]
+        if (entry && entry.depth >= depth) {
+            return root ? entry.move : entry.value;
+        }
+
         var moves = [ MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN ];
-        var beta = Number.NEGATIVE_INFINITY;
-        var betaMove = MOVE_LEFT;
+        var bestMove = MOVE_LEFT;
 
         for (var i = 0; i < moves.length; i++) {
             var copyGrid = copy(grid);
             var move = moves[i];
 
             if (make(copyGrid, move)) {
-                var value = search(copyGrid, depth - 1);
+                var value = search(copyGrid, depth - 1, alpha);
 
-                for (var k = 1; k < MOVE_ITERATIONS; k++) {
+                for (var k = 1; value > alpha && k < MOVE_ITERATIONS; k++) {
                     var copyGrid = copy(grid);
                     make(copyGrid, move);
                     //value = (value * k + search(copyGrid, depth - 1)) / (k + 1);
-                    value = Math.min(value, search(copyGrid, depth - 1));
+                    value = Math.min(value, search(copyGrid, depth - 1, alpha));
                 }
 
-                if (value > beta) {
-                    beta = value;
-                    betaMove = move;
+                if (value > alpha) {
+                    alpha = value;
+                    bestMove = move;
                 }
             }
-
         }
 
-        return root ? betaMove : beta;
+        transpositionTable[getGridKey(grid)] = {
+            depth: depth,
+            value: alpha,
+            move: bestMove
+        }
+
+        return root ? bestMove : alpha;
     }
 
     /**
@@ -158,21 +170,21 @@
 
         var edgeValue = 0;
         for (var i = 0; i < GRID_SIZE; i++) {
-            var tileNum = get(grid, i, 0);
-            if (tileNum)
-                edgeValue += tileNum;
+            var tile = get(grid, i, 0);
+            if (tile)
+                edgeValue += tile;
 
-            tileNum = get(grid, i, GRID_SIZE - 1);
-            if (tileNum)
-                edgeValue += tileNum;
+            tile = get(grid, i, GRID_SIZE - 1);
+            if (tile)
+                edgeValue += tile;
 
-            tileNum = get(grid, 0, i);
-            if (tileNum)
-                edgeValue += tileNum;
+            tile = get(grid, 0, i);
+            if (tile)
+                edgeValue += tile;
 
-            tileNum = get(grid, GRID_SIZE - 1, i);
-            if (tileNum)
-                edgeValue += tileNum;
+            tile = get(grid, GRID_SIZE - 1, i);
+            if (tile)
+                edgeValue += tile;
         }
 
         var adjValue = 0;
@@ -182,35 +194,35 @@
 
         for (var r = 0; r < GRID_SIZE; r++) {
             for (var c = 0; c < GRID_SIZE; c++) {
-                var tileNum = get(grid, r, c);
-                if (tileNum) {
+                var tile = get(grid, r, c);
+                if (tile) {
                     if (c < GRID_SIZE - 1) {
-                        var adjNum = get(grid, r, c + 1);
-                        if (adjNum) {
-                            adjValue += tileNum + adjNum;
-                            adjDiffValue += levelDifference(tileNum, adjNum);
+                        var adjTile = get(grid, r, c + 1);
+                        if (adjTile) {
+                            adjValue += tile + adjTile;
+                            adjDiffValue += levelDifference(tile, adjTile);
 
                             if (c < GRID_SIZE - 2) {
-                                var thirdNum = get(grid, r, c + 2);
-                                if (thirdNum && levelDifference(tileNum, thirdNum) <= 1) {
-                                    var averageNum = (tileNum + thirdNum) / 2;
-                                    insulationValue += levelDifference(averageNum, adjNum) * Math.log(averageNum);
+                                var thirdTile = get(grid, r, c + 2);
+                                if (thirdTile && levelDifference(tile, thirdTile) <= 1) {
+                                    var averageTile = (tile + thirdTile) / 2;
+                                    insulationValue += levelDifference(averageTile, adjTile) * Math.log(averageTile);
                                 }
                             }
                         }
                     }
 
                     if (r < GRID_SIZE - 1) {
-                        adjNum = get(grid, r + 1, c);
-                        if (adjNum) {
-                            adjValue += tileNum + adjNum;
-                            adjDiffValue += levelDifference(tileNum, adjNum);
+                        adjTile = get(grid, r + 1, c);
+                        if (adjTile) {
+                            adjValue += tile + adjTile;
+                            adjDiffValue += levelDifference(tile, adjTile);
 
                             if (c < GRID_SIZE - 2) {
-                                var thirdNum = get(grid, r + 2, c);
-                                if (thirdNum && levelDifference(tileNum, thirdNum) <= 1) {
-                                    var averageNum = (tileNum + thirdNum) / 2;
-                                    insulationValue += levelDifference(averageNum, adjNum) * Math.log(averageNum);
+                                var thirdTile = get(grid, r + 2, c);
+                                if (thirdTile && levelDifference(tile, thirdTile) <= 1) {
+                                    var averageTile = (tile + thirdTile) / 2;
+                                    insulationValue += levelDifference(averageTile, adjTile) * Math.log(averageTile);
                                 }
                             }
                         }
@@ -241,36 +253,36 @@
     }
 
     /**
-     * Computes the stack level difference between two numbers.
-     * @param num1: first number.
-     * @param num2: second number.
-     * @return stack level difference between two given numbers.
+     * Computes the stack level difference between two tiles.
+     * @param tile1: first tile value.
+     * @param tile2: second tile value.
+     * @return stack level difference between two given tiles.
      */
-    function levelDifference(num1, num2) {
-        var ratio = Math.max(num1 / num2, num2 / num1);
+    function levelDifference(tile1, tile2) {
+        var ratio = Math.max(tile1 / tile2, tile2 / tile1);
         return Math.log(ratio) * 1.44269504;
     }
 
     /**
-     * Returns the number in the grid for a given position.
+     * Returns the tile value in the grid for a given position.
      * @param grid: flat array representation of game grid.
      * @param row: position row.
      * @param col: position column.
-     * @return number in the grid for given position.
+     * @return tile value in the grid for given position.
      */
     function get(grid, row, col) {
         return grid[row * GRID_SIZE + col];
     }
 
     /**
-     * Sets the number in the grid for a given position.
+     * Sets the tile value in the grid for a given position.
      * @param grid: flat array representation of game grid.
      * @param row: position row.
      * @param col: position column.
-     * @param value: new value to assign.
+     * @param tile: new tile value to assign.
      */
-    function set(grid, row, col, value) {
-        grid[row * GRID_SIZE + col] = value;
+    function set(grid, row, col, tile) {
+        grid[row * GRID_SIZE + col] = tile;
     }
 
     /**
@@ -291,8 +303,8 @@
         var result = '';
         for (var r = 0; r < GRID_SIZE; r++) {
             for (var c = 0; c < GRID_SIZE; c++) {
-                var tileNum = get(grid, r, c);
-                result += tileNum ? pad(tileNum + '', 5) : '    .';
+                var tile = get(grid, r, c);
+                result += tile ? pad(tile + '', 5) : '    .';
             }
             result += '\n';
         }
@@ -340,14 +352,14 @@
 
                     while (inBounds(newr, newc)) {
                         var target = get(grid, newr, newc);
-                        var value = get(grid, oldr, oldc);
+                        var tile = get(grid, oldr, oldc);
                         if (!target) {
-                            set(grid, newr, newc, value);
+                            set(grid, newr, newc, tile);
                             set(grid, oldr, oldc, 0);
                             anyMoved = true;
                         }
-                        else if (target === value) {
-                            set(grid, newr, newc, -2 * value);
+                        else if (target === tile) {
+                            set(grid, newr, newc, -2 * tile);
                             set(grid, oldr, oldc, 0);
                             anyMoved = true;
                             break;
@@ -386,18 +398,32 @@
         }
     }
 
+    function getTileKey(row, col, tile) {
+        return tile * GRID_SIZE * GRID_SIZE + row * GRID_SIZE + col;
+    }
+
+    function getGridKey(grid) {
+        var value = 0;
+        for (var r = 0; r < GRID_SIZE; r++) {
+            for (var c = 0; c < GRID_SIZE; c++) {
+                value ^= keyTable[getTileKey(r, c, get(grid, r, c))];
+            }
+        }
+        return value;
+    }
+
     /**
-     * Gets tile list from DOM.
-     * @return tile list, including superfluous tiles.
+     * Constructs current game grid from DOM.
+     * @return flat array representation game grid.
      */
-    function getTileList() {
+    function getGrid() {
         var tileContainer = document.getElementsByClassName('tile-container')[0];
-        var list = [];
+        var tileList = [];
 
         for (var i = 0 ; i < tileContainer.children.length; i++) {
             var tile = tileContainer.children[i];
             var tileInner = tile.children[0];
-            var num = parseInt(tileInner.innerHTML);
+            var value = parseInt(tileInner.innerHTML);
 
             var className = tile.className;
             var positionPrefix = 'tile-position-';
@@ -406,14 +432,23 @@
             var row = parseInt(positionStr[2]) - 1;
             var col = parseInt(positionStr[0]) - 1;
 
-            list.push({
-                num: num,
+            tileList.push({
+                value: value,
                 row: row,
                 col: col
             });
         }
 
-        return list;
+        var grid = new Array(GRID_SIZE * GRID_SIZE);
+        for (var i = 0; i < grid.length; i++) {
+            grid[i] = 0;
+        }
+        for (var i = 0; i < tileList.length; i++) {
+            var tile = tileList[i];
+            set(grid, tile.row, tile.col, tile.value);
+        }
+
+        return grid;
     }
 
     /**

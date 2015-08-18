@@ -7,6 +7,8 @@
     // Search constants.
     var SEARCH_DEPTH = 3;
     var MOVE_ITERATIONS = 5;
+    var SEARCH_TIME = 100;
+    var RETRY_TIME = 1000;
 
     // Evaluation constants.
     var EDGE_WEIGHT = 1;
@@ -60,7 +62,7 @@
     //*
     setInterval(function () {
         nextMove();
-    }, 50);
+    }, SEARCH_TIME);
     /*/
     var grid = getGrid();
     print(grid);
@@ -98,7 +100,7 @@
                         '\n');
             retry();
         }
-    }, 1000);
+    }, RETRY_TIME);
 
     /**
      * Chooses and the next move and plays it.
@@ -120,14 +122,16 @@
         if (depth <= 0)
             return evaluate(grid);
 
-        // Hash probe
-        var entry = transpositionTable[getGridKey(grid)]
-        if (entry && entry.depth >= depth) {
+        // Transposition probe
+        var key = getGridKey(grid);
+        var entry = transpositionTable[key];
+        if (entry && entry.depth >= depth && (!entry.isBound || entry.value <= alpha)) {
             return root ? entry.move : entry.value;
         }
 
         var moves = [ MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN ];
         var bestMove = MOVE_LEFT;
+        var alphaImproved = false;
 
         for (var i = 0; i < moves.length; i++) {
             var copyGrid = copy(grid);
@@ -137,24 +141,25 @@
                 var value = search(copyGrid, depth - 1, alpha);
 
                 for (var k = 1; value > alpha && k < MOVE_ITERATIONS; k++) {
-                    var copyGrid = copy(grid);
+                    copyGrid = copy(grid);
                     make(copyGrid, move);
-                    //value = (value * k + search(copyGrid, depth - 1)) / (k + 1);
                     value = Math.min(value, search(copyGrid, depth - 1, alpha));
                 }
 
                 if (value > alpha) {
                     alpha = value;
                     bestMove = move;
+                    alphaImproved = true;
                 }
             }
         }
 
-        transpositionTable[getGridKey(grid)] = {
+        transpositionTable[key] = {
             depth: depth,
             value: alpha,
-            move: bestMove
-        }
+            move: bestMove,
+            isBound: !alphaImproved
+        };
 
         return root ? bestMove : alpha;
     }
@@ -456,12 +461,12 @@
      * @param move: object containing key information.
      */
     function pressKey(move) {
-        var event = new Event("keydown", {
+        var event = new Event('keydown', {
             bubbles: true,
             cancelable: true
         });
         event.altKey = false;
-        event.char = "";
+        event.char = '';
         event.charCode = 0;
         event.ctrlKey = false;
         event.defaultPrevented = false;

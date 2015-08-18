@@ -1,23 +1,27 @@
 (function () {
 
+    // Output constants.
+    var PRINT_MOVES = false;
+
+    // Search constants.
+    var SEARCH_DEPTH = 3;
+    var MOVE_ITERATIONS = 10;
+    var SEARCH_TIME = 100;
+    var RETRY_TIME = 1000;
+    var ACCEPT_DEFEAT_VALUE = -999999;
+
+    // Evaluation constants.
+    var EVALUATE_ONLY = false;
+    var EDGE_WEIGHT = 1;
+    var NUM_EMPTY_WEIGHT = 5;
+    var ADJ_WEIGHT = 0.001;
+    var ADJ_DIFF_WEIGHT = -0.5;
+    var INSULATION_WEIGHT = -2;
+
     // Game constants.
     var GRID_SIZE = 4;
     var PROB_2 = 0.9;
 
-    // Search constants.
-    var SEARCH_DEPTH = 3;
-    var MOVE_ITERATIONS = 5;
-    var SEARCH_TIME = 100;
-    var RETRY_TIME = 1000;
-
-    // Evaluation constants.
-    var EDGE_WEIGHT = 1;
-    var NUM_EMPTY_WEIGHT = 5;
-    var ADJ_WEIGHT = 0.05;
-    var ADJ_DIFF_WEIGHT = -0.5;
-    var INSULATION_WEIGHT = -2;
-
-    // Shared constants.
     var MOVE_UP = {
         drow: -1,
         dcol: 0,
@@ -59,15 +63,16 @@
         }
     }
 
-    //*
-    setInterval(function () {
-        nextMove();
-    }, SEARCH_TIME);
-    /*/
-    var grid = getGrid();
-    print(grid);
-    evaluate(grid, true);
-    //*/
+    if (EVALUATE_ONLY) {
+        var grid = getGrid();
+        print(grid);
+        evaluate(grid, true);
+    }
+    else {
+        setInterval(function () {
+            nextMove();
+        }, SEARCH_TIME);
+    }
 
     var games = 0;
     var bestScore = 0;
@@ -112,7 +117,7 @@
     function nextMove() {
         var grid = getGrid();
         var move = search(grid, SEARCH_DEPTH, Number.NEGATIVE_INFINITY, true);
-        pressKey(move, true);
+        pressKey(move, PRINT_MOVES);
     }
 
     /**
@@ -134,7 +139,7 @@
         }
 
         var moves = [ MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN ];
-        var bestMove = moves[0];
+        var bestMove = undefined;
         var alphaImproved = false;
 
         for (var i = 0; i < moves.length; i++) {
@@ -142,6 +147,7 @@
             var move = moves[i];
 
             if (make(copyGrid, move)) {
+                bestMove = bestMove || move;
                 var value = search(copyGrid, depth - 1, alpha);
 
                 for (var k = 1; value > alpha && k < MOVE_ITERATIONS; k++) {
@@ -156,6 +162,12 @@
                     alphaImproved = true;
                 }
             }
+        }
+
+        if (!bestMove) {
+            if (root)
+                throw 'No moves possible at root.';
+            return ACCEPT_DEFEAT_VALUE + evaluate(grid);
         }
 
         transpositionTable[key] = {
@@ -179,15 +191,7 @@
 
         var edgeValue = 0;
         for (var i = 0; i < GRID_SIZE; i++) {
-            var tile = get(grid, i, 0);
-            if (tile)
-                edgeValue += tile;
-
-            tile = get(grid, i, GRID_SIZE - 1);
-            if (tile)
-                edgeValue += tile;
-
-            tile = get(grid, 0, i);
+            var tile = get(grid, i, GRID_SIZE - 1);
             if (tile)
                 edgeValue += tile;
 

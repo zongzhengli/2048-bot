@@ -12,10 +12,10 @@
 
     // Evaluation constants.
     var EDGE_WEIGHT = 1;
-    var NUM_EMPTY_WEIGHT = 1;
-    var ADJ_WEIGHT = 0.1;
+    var NUM_EMPTY_WEIGHT = 5;
+    var ADJ_WEIGHT = 0.05;
     var ADJ_DIFF_WEIGHT = -0.5;
-    var INSULATION_WEIGHT = -10;
+    var INSULATION_WEIGHT = -2;
 
     // Shared constants.
     var MOVE_UP = {
@@ -76,7 +76,11 @@
     var averageLargestTile = 0;
 
     setInterval(function () {
-        if (isGameOver()) {
+        if (gameWon()) {
+            keepPlaying();
+        }
+
+        if (gameLost()) {
             var score = getScore();
             bestScore = Math.max(bestScore, score);
 
@@ -98,7 +102,7 @@
                         'Best score             ' + bestScore + '\n' +
                         'Best largest tile      ' + bestLargestTile + '\n' +
                         '\n');
-            retry();
+            tryAgain();
         }
     }, RETRY_TIME);
 
@@ -108,13 +112,14 @@
     function nextMove() {
         var grid = getGrid();
         var move = search(grid, SEARCH_DEPTH, Number.NEGATIVE_INFINITY, true);
-        pressKey(move);
+        pressKey(move, true);
     }
 
     /**
      * Searches for the best move with depth-first search.
      * @param grid: flat array representation of game grid.
      * @param depth: search tree depth, where leaves are at depth 0.
+     * @param alpha: lower bound on search value.
      * @param root: whether to treat the node as the root node.
      * @return best move at root nodes, value of best move at other nodes.
      */
@@ -122,7 +127,6 @@
         if (depth <= 0)
             return evaluate(grid);
 
-        // Transposition probe
         var key = getGridKey(grid);
         var entry = transpositionTable[key];
         if (entry && entry.depth >= depth && (!entry.isBound || entry.value <= alpha)) {
@@ -130,7 +134,7 @@
         }
 
         var moves = [ MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN ];
-        var bestMove = MOVE_LEFT;
+        var bestMove = moves[0];
         var alphaImproved = false;
 
         for (var i = 0; i < moves.length; i++) {
@@ -167,10 +171,10 @@
     /**
      * Evaluates the given grid state.
      * @param grid: flat array representation of game grid.
-     * @param printComponents: whether to print evaluation component breakdown in console.
+     * @param logging: whether to log evaluation computation.
      * @return estimated value of grid state.
      */
-    function evaluate(grid, printComponents) {
+    function evaluate(grid, logging) {
         var value = 0;
 
         var edgeValue = 0;
@@ -205,7 +209,7 @@
                         var adjTile = get(grid, r, c + 1);
                         if (adjTile) {
                             adjValue += tile + adjTile;
-                            adjDiffValue += levelDifference(tile, adjTile);
+                            adjDiffValue += levelDifference(tile, adjTile) * Math.log(tile + adjTile);
 
                             if (c < GRID_SIZE - 2) {
                                 var thirdTile = get(grid, r, c + 2);
@@ -221,7 +225,7 @@
                         adjTile = get(grid, r + 1, c);
                         if (adjTile) {
                             adjValue += tile + adjTile;
-                            adjDiffValue += levelDifference(tile, adjTile);
+                            adjDiffValue += levelDifference(tile, adjTile) * Math.log(tile + adjTile);
 
                             if (c < GRID_SIZE - 2) {
                                 var thirdTile = get(grid, r + 2, c);
@@ -236,7 +240,8 @@
                 else numEmpty++;
             }
         }
-        var numEmptyValue = numEmpty;
+
+        var numEmptyValue = 11.12249 + (0.05735587 - 11.12249) / (1 + Math.pow((numEmpty / 2.480941), 2.717769))
 
         value += EDGE_WEIGHT * edgeValue;
         value += NUM_EMPTY_WEIGHT * numEmptyValue;
@@ -244,7 +249,7 @@
         value += ADJ_DIFF_WEIGHT * adjDiffValue;
         value += INSULATION_WEIGHT * insulationValue;
 
-        if (printComponents) {
+        if (logging) {
             console.log('EVALUATION     ' + value + '\n' +
                         '  edge         ' + (EDGE_WEIGHT * edgeValue) + '\n' +
                         '  numEmpty     ' + (NUM_EMPTY_WEIGHT * numEmptyValue) + '\n' +
@@ -291,11 +296,8 @@
     }
 
     /**
-     * Prints the given grid in console.
+     * Prints the given grid to the console.
      * @param grid: flat array representation of game grid.
-     * @param row: position row.
-     * @param col: position column.
-     * @param value: new value to assign.
      */
     function print(grid) {
         function pad(str, len) {
@@ -339,6 +341,7 @@
      * Makes the given move on the grid, randomly selects new tile insertion location.
      * @param grid: flat array representation of game grid.
      * @param move: object containing move vectors.
+     * @return whether the move was successfully made.
      */
     function make(grid, move) {
         var start = move.dir * (GRID_SIZE - 1);
@@ -403,10 +406,22 @@
         }
     }
 
+    /**
+     * Computes hash key for a tile at the given position.
+     * @param row: position row.
+     * @param col: position column.
+     * @param tile: tile value.
+     * @return hash key for tile.
+     */
     function getTileKey(row, col, tile) {
         return tile * GRID_SIZE * GRID_SIZE + row * GRID_SIZE + col;
     }
 
+    /**
+     * Computes hash key for given game grid.
+     * @param grid: flat array representation game grid.
+     * @return hash key for given game grid.
+     */
     function getGridKey(grid) {
         var value = 0;
         for (var r = 0; r < GRID_SIZE; r++) {
@@ -459,8 +474,9 @@
     /**
      * Emulates a keypress for a given move.
      * @param move: object containing key information.
+     * @param logging: whether to log key presses.
      */
-    function pressKey(move) {
+    function pressKey(move, logging) {
         var event = new Event('keydown', {
             bubbles: true,
             cancelable: true
@@ -482,27 +498,47 @@
         event.which = move.keyCode;
 
         document.body.dispatchEvent(event);
+        if (logging) {
+            console.log('Key pressed: ' + move.key);
+        }
     }
 
     /**
-     * Determines whether the current game has concluded from DOM.
+     * Determines whether the current game has been lost from the DOM.
      * @return whether current game has concluded.
      */
-    function isGameOver() {
+    function gameLost() {
         var gameMessage = document.getElementsByClassName('game-message')[0];
         return gameMessage.className.indexOf('game-over') >= 0;
     }
 
     /**
+     * Determines whether the current game has been won from the DOM.
+     * @return whether current game has concluded.
+     */
+    function gameWon() {
+        var gameMessage = document.getElementsByClassName('game-message')[0];
+        return gameMessage.className.indexOf('game-won') >= 0;
+    }
+
+    /**
      * Starts a new game when the current game has concluded.
      */
-    function retry() {
+    function tryAgain() {
         var retryButton = document.getElementsByClassName('retry-button')[0];
         retryButton.click();
     }
 
     /**
-     * Gets the current score from DOM.
+     * Starts a new game when the current game has concluded.
+     */
+    function keepPlaying() {
+        var keepPlayingButton = document.getElementsByClassName('keep-playing-button')[0];
+        keepPlayingButton.click();
+    }
+
+    /**
+     * Gets the current score from the DOM.
      * @return current score of game.
      */
     function getScore() {
@@ -511,7 +547,7 @@
     }
 
     /**
-     * Gets the best score from DOM.
+     * Gets the best score from the DOM.
      * @return best score in all games.
      */
     function getBestScore() {

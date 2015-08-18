@@ -4,8 +4,8 @@
     var PRINT_MOVES = false;
 
     // Search constants.
-    var SEARCH_DEPTH = 3;
-    var SEARCH_TIME = 100;
+    var SEARCH_DEPTH = 4;
+    var SEARCH_TIME = 350;
     var RETRY_TIME = 1000;
     var ACCEPT_DEFEAT_VALUE = -999999;
 
@@ -13,7 +13,6 @@
     var EVALUATE_ONLY = false;
     var EDGE_WEIGHT = 1;
     var NUM_EMPTY_WEIGHT = 5;
-    var ADJ_WEIGHT = 0.001;
     var ADJ_DIFF_WEIGHT = -0.5;
     var INSULATION_WEIGHT = -2;
 
@@ -139,7 +138,14 @@
             return root ? entry.move : entry.value;
         }
 
-        var moves = [ MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN ];
+        var moves = [ MOVE_RIGHT, MOVE_DOWN, MOVE_LEFT, MOVE_UP ];
+        if (entry) {
+            var index = moves.indexOf(entry.move);
+            var temp = moves[index];
+            moves[index] = moves[0];
+            moves[0] = temp;
+        }
+
         var bestMove = undefined;
         var alphaImproved = false;
 
@@ -201,7 +207,6 @@
                 edgeValue += tile;
         }
 
-        var adjValue = 0;
         var adjDiffValue = 0;
         var insulationValue = 0;
         var numEmpty = 0;
@@ -213,7 +218,6 @@
                     if (c < GRID_SIZE - 1) {
                         var adjTile = get(grid, r, c + 1);
                         if (adjTile) {
-                            adjValue += tile + adjTile;
                             adjDiffValue += levelDifference(tile, adjTile) * Math.log(tile + adjTile);
 
                             if (c < GRID_SIZE - 2) {
@@ -229,7 +233,6 @@
                     if (r < GRID_SIZE - 1) {
                         adjTile = get(grid, r + 1, c);
                         if (adjTile) {
-                            adjValue += tile + adjTile;
                             adjDiffValue += levelDifference(tile, adjTile) * Math.log(tile + adjTile);
 
                             if (c < GRID_SIZE - 2) {
@@ -250,7 +253,6 @@
 
         value += EDGE_WEIGHT * edgeValue;
         value += NUM_EMPTY_WEIGHT * numEmptyValue;
-        value += ADJ_WEIGHT * adjValue;
         value += ADJ_DIFF_WEIGHT * adjDiffValue;
         value += INSULATION_WEIGHT * insulationValue;
 
@@ -258,7 +260,6 @@
             console.log('EVALUATION     ' + value + '\n' +
                         '  edge         ' + (EDGE_WEIGHT * edgeValue) + '\n' +
                         '  numEmpty     ' + (NUM_EMPTY_WEIGHT * numEmptyValue) + '\n' +
-                        '  adj          ' + (ADJ_WEIGHT * adjValue) + '\n' +
                         '  adjDiff      ' + (ADJ_DIFF_WEIGHT * adjDiffValue) + '\n' +
                         '  insulation   ' + (INSULATION_WEIGHT * insulationValue) + '\n'
             );

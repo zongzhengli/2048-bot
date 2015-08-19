@@ -11,10 +11,16 @@
 
     // Evaluation constants.
     var EVALUATE_ONLY = false;
-    var EDGE_WEIGHT = 1;
     var NUM_EMPTY_WEIGHT = 5;
     var ADJ_DIFF_WEIGHT = -0.5;
     var INSULATION_WEIGHT = -2;
+    var POSITION_WEIGHT = 0.04;
+    var POSITION_VALUE = [
+         0,  0,  0, 10,
+         0,  0,  0, 15,
+         0,  0, -5, 20,
+        10, 15, 20, 50
+    ];
 
     // Game constants.
     var GRID_SIZE = 4;
@@ -67,9 +73,7 @@
         evaluate(grid, true);
     }
     else {
-        setInterval(function () {
-            nextMove();
-        }, SEARCH_TIME);
+        setInterval(nextMove, SEARCH_TIME);
     }
 
     var games = 0;
@@ -196,17 +200,7 @@
     function evaluate(grid, logging) {
         var value = 0;
 
-        var edgeValue = 0;
-        for (var i = 0; i < GRID_SIZE; i++) {
-            var tile = get(grid, i, GRID_SIZE - 1);
-            if (tile)
-                edgeValue += tile;
-
-            tile = get(grid, GRID_SIZE - 1, i);
-            if (tile)
-                edgeValue += tile;
-        }
-
+        var positionValue = 0;
         var adjDiffValue = 0;
         var insulationValue = 0;
         var numEmpty = 0;
@@ -214,7 +208,12 @@
         for (var r = 0; r < GRID_SIZE; r++) {
             for (var c = 0; c < GRID_SIZE; c++) {
                 var tile = get(grid, r, c);
-                if (tile) {
+                if (!tile) {
+                    numEmpty++;
+                }
+                else {
+                    positionValue += tile * POSITION_VALUE[r * GRID_SIZE + c];
+
                     if (c < GRID_SIZE - 1) {
                         var adjTile = get(grid, r, c + 1);
                         if (adjTile) {
@@ -245,20 +244,19 @@
                         }
                     }
                 }
-                else numEmpty++;
             }
         }
 
-        var numEmptyValue = 11.12249 + (0.05735587 - 11.12249) / (1 + Math.pow((numEmpty / 2.480941), 2.717769))
+        var numEmptyValue = 11.12249 + (0.05735587 - 11.12249) / (1 + Math.pow((numEmpty / 2.480941), 2.717769));
 
-        value += EDGE_WEIGHT * edgeValue;
+        value += POSITION_WEIGHT * positionValue;
         value += NUM_EMPTY_WEIGHT * numEmptyValue;
         value += ADJ_DIFF_WEIGHT * adjDiffValue;
         value += INSULATION_WEIGHT * insulationValue;
 
         if (logging) {
             console.log('EVALUATION     ' + value + '\n' +
-                        '  edge         ' + (EDGE_WEIGHT * edgeValue) + '\n' +
+                        '  position     ' + (POSITION_WEIGHT * positionValue) + '\n' +
                         '  numEmpty     ' + (NUM_EMPTY_WEIGHT * numEmptyValue) + '\n' +
                         '  adjDiff      ' + (ADJ_DIFF_WEIGHT * adjDiffValue) + '\n' +
                         '  insulation   ' + (INSULATION_WEIGHT * insulationValue) + '\n'
@@ -416,9 +414,9 @@
     }
 
     /**
-     * Computes hash key for given game grid.
-     * @param grid: flat array representation game grid.
-     * @return hash key for given game grid.
+     * Computes hash key for the given game grid.
+     * @param grid: flat array representation of game grid.
+     * @return hash key for the given game grid.
      */
     function getGridKey(grid) {
         var value = 0;
@@ -432,7 +430,7 @@
 
     /**
      * Constructs current game grid from DOM.
-     * @return flat array representation game grid.
+     * @return flat array representation of game grid.
      */
     function getGrid() {
         var tileContainer = document.getElementsByClassName('tile-container')[0];
@@ -528,7 +526,7 @@
     }
 
     /**
-     * Starts a new game when the current game has concluded.
+     * Continues the game when the current game has been won.
      */
     function keepPlaying() {
         var keepPlayingButton = document.getElementsByClassName('keep-playing-button')[0];

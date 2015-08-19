@@ -1,8 +1,5 @@
 (function () {
 
-    // Output constants.
-    var PRINT_MOVES = false;
-
     // Search constants.
     var SEARCH_DEPTH = 4;
     var SEARCH_TIME = 350;
@@ -55,18 +52,6 @@
         key: 'Right'
     };
 
-    // Initialize hash tables.
-    var transpositionTable = {};
-    var keyTable = {};
-    for (var r = 0; r < GRID_SIZE; r++) {
-        for (var c = 0; c < GRID_SIZE; c++) {
-            for (var t = 2; t <= 8192; t *= 2) {
-                keyTable[getTileKey(r, c, t)] = Math.round(0xffffffff * Math.random());
-            }
-            keyTable[getTileKey(r, c, 0)] = 0;
-        }
-    }
-
     if (EVALUATE_ONLY) {
         var grid = getGrid();
         print(grid);
@@ -110,7 +95,7 @@
                         'Best largest tile      ' + bestLargestTile + '\n' +
                         '\n');
 
-            transpositionTable = {};
+            search.table = {};
             tryAgain();
         }
     }, RETRY_TIME);
@@ -121,7 +106,7 @@
     function nextMove() {
         var grid = getGrid();
         var move = search(grid, SEARCH_DEPTH, Number.NEGATIVE_INFINITY, true);
-        pressKey(move, PRINT_MOVES);
+        pressKey(move);
     }
 
     /**
@@ -136,11 +121,13 @@
         if (depth <= 0)
             return evaluate(grid);
 
+        if (!search.table)
+            search.table = {};
+
         var key = getGridKey(grid);
-        var entry = transpositionTable[key];
-        if (entry && entry.depth >= depth && (!entry.isBound || entry.value <= alpha)) {
+        var entry = search.table[key];
+        if (entry && entry.depth >= depth && (!entry.isBound || entry.value <= alpha))
             return root ? entry.move : entry.value;
-        }
 
         var moves = [ MOVE_RIGHT, MOVE_DOWN, MOVE_LEFT, MOVE_UP ];
         if (entry) {
@@ -161,7 +148,7 @@
                 bestMove = bestMove || move;
                 var value = Number.POSITIVE_INFINITY;
 
-                for (var j = 0; value > alpha && j < copyGrid.length; j++) {
+                for (var j = copyGrid.length - 1; j >= 0 && value > alpha; j--) {
                     if (!copyGrid[j]) {
                         copyGrid[j] = 2;
                         value = Math.min(value, search(copyGrid, depth - 1, alpha));
@@ -177,11 +164,10 @@
             }
         }
 
-        if (!bestMove) {
+        if (!bestMove)
             return root ? MOVE_LEFT : ACCEPT_DEFEAT_VALUE + evaluate(grid);
-        }
 
-        transpositionTable[key] = {
+        search.table[key] = {
             depth: depth,
             value: alpha,
             move: bestMove,
@@ -221,7 +207,7 @@
 
                             if (c < GRID_SIZE - 2) {
                                 var thirdTile = get(grid, r, c + 2);
-                                if (thirdTile && levelDifference(tile, thirdTile) <= 1) {
+                                if (thirdTile && levelDifference(tile, thirdTile) <= 1.1) {
                                     var averageTile = (tile + thirdTile) / 2;
                                     insulationValue += levelDifference(averageTile, adjTile) * Math.log(averageTile);
                                 }
@@ -236,7 +222,7 @@
 
                             if (c < GRID_SIZE - 2) {
                                 var thirdTile = get(grid, r + 2, c);
-                                if (thirdTile && levelDifference(tile, thirdTile) <= 1) {
+                                if (thirdTile && levelDifference(tile, thirdTile) <= 1.1) {
                                     var averageTile = (tile + thirdTile) / 2;
                                     insulationValue += levelDifference(averageTile, adjTile) * Math.log(averageTile);
                                 }
@@ -273,8 +259,8 @@
      * @return stack level difference between two given tiles.
      */
     function levelDifference(tile1, tile2) {
-        var ratio = Math.max(tile1 / tile2, tile2 / tile1);
-        return Math.log(ratio) * 1.44269504;
+        var ratio = tile1 > tile2 ? tile1 / tile2 : tile2 / tile1;
+        return Math.log(ratio) * 1.44269504089;
     }
 
     /**
@@ -403,29 +389,36 @@
     }
 
     /**
-     * Computes hash key for a tile at the given position.
-     * @param row: position row.
-     * @param col: position column.
-     * @param tile: tile value.
-     * @return hash key for tile.
-     */
-    function getTileKey(row, col, tile) {
-        return tile * GRID_SIZE * GRID_SIZE + row * GRID_SIZE + col;
-    }
-
-    /**
      * Computes hash key for the given game grid.
      * @param grid: flat array representation of game grid.
      * @return hash key for the given game grid.
      */
     function getGridKey(grid) {
-        var value = 0;
-        for (var r = 0; r < GRID_SIZE; r++) {
-            for (var c = 0; c < GRID_SIZE; c++) {
-                value ^= keyTable[getTileKey(r, c, get(grid, r, c))];
+        if (!getGridKey.table1) {
+            getGridKey.table1 = {};
+            getGridKey.table2 = {};
+
+            for (var i = 0; i < grid.length; i++) {
+                for (var t = 2; t <= 8192; t *= 2) {
+                    var key = t * grid.length + i;
+                    getGridKey.table1[key] = Math.round(0xffffffff * Math.random());
+                    getGridKey.table2[key] = Math.round(0xffffffff * Math.random());
+                }
             }
         }
-        return value;
+
+        var value1 = 0;
+        var value2 = 0;
+        for (var i = 0; i < grid.length; i++) {
+            var tile = grid[i];
+            if (tile) {
+                var key = tile * grid.length + i;
+                value1 ^= getGridKey.table1[key];
+                value2 ^= getGridKey.table2[key];
+            }
+        }
+
+        return value1 + '' + value2;
     }
 
     /**
@@ -470,9 +463,8 @@
     /**
      * Emulates a keypress for a given move.
      * @param move: object containing key information.
-     * @param logging: whether to log key presses.
      */
-    function pressKey(move, logging) {
+    function pressKey(move) {
         var event = new Event('keydown', {
             bubbles: true,
             cancelable: true
@@ -494,9 +486,6 @@
         event.which = move.keyCode;
 
         document.body.dispatchEvent(event);
-        if (logging) {
-            console.log('Key pressed: ' + move.key);
-        }
     }
 
     /**

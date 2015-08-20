@@ -2,7 +2,7 @@
 
     // Search constants.
     var SEARCH_DEPTH = 4;
-    var SEARCH_TIME = 350;
+    var SEARCH_TIME = 50;
     var RETRY_TIME = 1000;
     var ACCEPT_DEFEAT_VALUE = -999999;
 
@@ -18,6 +18,9 @@
          0,  0, -5, 20,
         10, 15, 20, 50
     ];
+    var LOG2 = {};
+    for (var i = 0 ; i < 20; i++)
+        LOG2[1 << i] = i;
 
     // Game constants.
     var GRID_SIZE = 4;
@@ -78,7 +81,7 @@
 
             var grid = getGrid();
             var largestTile = 0;
-            for (var i = 0 ; i < grid.length; i++)
+            for (var i = 0; i < grid.length; i++)
                 largestTile = Math.max(largestTile, grid[i]);
             bestLargestTile = Math.max(bestLargestTile, largestTile);
 
@@ -208,8 +211,8 @@
                             if (c < GRID_SIZE - 2) {
                                 var thirdTile = get(grid, r, c + 2);
                                 if (thirdTile && levelDifference(tile, thirdTile) <= 1.1) {
-                                    var averageTile = (tile + thirdTile) / 2;
-                                    insulationValue += levelDifference(averageTile, adjTile) * Math.log(averageTile);
+                                    var smallerTile = Math.min(tile, thirdTile);
+                                    insulationValue += levelDifference(smallerTile, adjTile) * Math.log(smallerTile);
                                 }
                             }
                         }
@@ -223,8 +226,8 @@
                             if (c < GRID_SIZE - 2) {
                                 var thirdTile = get(grid, r + 2, c);
                                 if (thirdTile && levelDifference(tile, thirdTile) <= 1.1) {
-                                    var averageTile = (tile + thirdTile) / 2;
-                                    insulationValue += levelDifference(averageTile, adjTile) * Math.log(averageTile);
+                                    var smallerTile = Math.min(tile, thirdTile);
+                                    insulationValue += levelDifference(smallerTile, adjTile) * Math.log(smallerTile);
                                 }
                             }
                         }
@@ -259,8 +262,7 @@
      * @return stack level difference between two given tiles.
      */
     function levelDifference(tile1, tile2) {
-        var ratio = tile1 > tile2 ? tile1 / tile2 : tile2 / tile1;
-        return Math.log(ratio) * 1.44269504089;
+        return tile1 > tile2 ? LOG2[tile1] - LOG2[tile2] : LOG2[tile2] - LOG2[tile1];
     }
 
     /**

@@ -1,4 +1,7 @@
 (function () {
+    // Bot flags.
+    var EVALUATE_ONLY = false;
+    var AUTO_RETRY = true;
 
     // Search constants.
     var SEARCH_DEPTH = 4;
@@ -7,7 +10,6 @@
     var ACCEPT_DEFEAT_VALUE = -999999;
 
     // Evaluation constants.
-    var EVALUATE_ONLY = false;
     var NUM_EMPTY_WEIGHT = 5;
     var ADJ_DIFF_WEIGHT = -0.5;
     var INSULATION_WEIGHT = -2;
@@ -55,53 +57,62 @@
         key: 'Right'
     };
 
+    // If EVALUATE_ONLY flag is not set, play the game. If the flag is set (for
+    // development purposes), just print detailed evaluation output.
     if (EVALUATE_ONLY) {
         var grid = getGrid();
         print(grid);
         evaluate(grid, true);
     }
-    else {
+    else
         setInterval(nextMove, SEARCH_TIME);
-    }
 
-    var games = 0;
-    var bestScore = 0;
-    var averageScore = 0;
-    var bestLargestTile = 0;
-    var averageLargestTile = 0;
-
-    setInterval(function () {
-        if (gameWon()) {
+    // Press continue to keep playing if we win the game.
+    setInterval(function() {
+        if (gameWon())
             keepPlaying();
-        }
-
-        if (gameLost()) {
-            var score = getScore();
-            bestScore = Math.max(bestScore, score);
-
-            var grid = getGrid();
-            var largestTile = 0;
-            for (var i = 0; i < grid.length; i++)
-                largestTile = Math.max(largestTile, grid[i]);
-            bestLargestTile = Math.max(bestLargestTile, largestTile);
-
-            averageScore = (averageScore * games + score) / (games + 1);
-            averageLargestTile = (averageLargestTile * games + largestTile) / (games + 1);
-            games++;
-
-            console.log('Game                   ' + games + '\n' +
-                        'Score                  ' + score + '\n' +
-                        'Largest tile           ' + largestTile + '\n' +
-                        'Average score          ' + Math.round(averageScore) + '\n' +
-                        'Average largest tile   ' + Math.round(averageLargestTile) + '\n' +
-                        'Best score             ' + bestScore + '\n' +
-                        'Best largest tile      ' + bestLargestTile + '\n' +
-                        '\n');
-
-            search.table = {};
-            tryAgain();
-        }
     }, RETRY_TIME);
+
+    // If AUTO_RETRY flag is set, print statistics and automatically retry after
+    // losses.
+    if (AUTO_RETRY) {
+        var games = 0;
+        var bestScore = 0;
+        var averageScore = 0;
+        var bestLargestTile = 0;
+        var averageLargestTile = 0;
+
+        setInterval(function() {
+            if (gameLost()) {
+                var score = getScore();
+                bestScore = Math.max(bestScore, score);
+
+                var grid = getGrid();
+                var largestTile = 0;
+                for (var i = 0; i < grid.length; i++)
+                    largestTile = Math.max(largestTile, grid[i]);
+                bestLargestTile = Math.max(bestLargestTile, largestTile);
+
+                averageScore = (averageScore * games + score) / (games + 1);
+                averageLargestTile = (averageLargestTile * games + largestTile) / (games + 1);
+                games++;
+
+                console.log('Game                   ' + games + '\n' +
+                            'Score                  ' + score + '\n' +
+                            'Largest tile           ' + largestTile + '\n' +
+                            'Average score          ' + Math.round(averageScore) + '\n' +
+                            'Average largest tile   ' + Math.round(averageLargestTile) + '\n' +
+                            'Best score             ' + bestScore + '\n' +
+                            'Best largest tile      ' + bestLargestTile + '\n' +
+                            '\n');
+
+                search.table = {};
+
+                if (AUTO_RETRY)
+                    tryAgain();
+            }
+        }, RETRY_TIME);
+    }
 
     /**
      * Chooses and the next move and plays it.

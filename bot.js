@@ -1,7 +1,7 @@
 (function () {
     // Bot flags.
     var EVALUATE_ONLY = false;
-    var AUTO_RETRY = true;
+    var AUTO_RETRY = false;
 
     // Search constants.
     var SEARCH_DEPTH = 4;

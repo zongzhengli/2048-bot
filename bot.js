@@ -341,7 +341,7 @@
     }
 
     /**
-     * Makes the given move on the grid, randomly selects new tile insertion location.
+     * Makes the given move on the grid without inserting new tile.
      * @param grid: flat array representation of game grid.
      * @param move: object containing move vectors.
      * @return whether the move was made successfully.

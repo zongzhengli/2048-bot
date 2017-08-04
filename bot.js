@@ -397,6 +397,7 @@
                             anyMoved = true;
                         }
                         else if (target === tile) {
+                            // negative to prevent additional merging
                             set(grid, newr, newc, -2 * tile);
                             set(grid, oldr, oldc, 0);
                             anyMoved = true;
@@ -411,7 +412,7 @@
             }
         }
 
-        if (!anyMoved){
+        if (!anyMoved) {
             return false;
         }
 
@@ -425,7 +426,7 @@
             }
         }
 
-        if (numEmpty === 0){
+        if (numEmpty === 0) {
             throw 'No empty squares after making move.';
         }
 

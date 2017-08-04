@@ -21,13 +21,20 @@
         10, 15, 20, 50
     ];
     var LOG2 = {};
-    for (var i = 0 ; i < 20; i++)
+    for (var i = 0 ; i < 20; i++) {
         LOG2[1 << i] = i;
+    }
 
     // Game constants.
     var GRID_SIZE = 4;
     var PROB_2 = 0.9;
 
+    // Move constants. 
+    // drow: delta along row axis
+    // dcol: delta along column axis
+    // dir: iteration direction for correct merging
+    // keyCode: key code to send
+    // key: key name to send
     var MOVE_UP = {
         drow: -1,
         dcol: 0,
@@ -64,13 +71,15 @@
         print(grid);
         evaluate(grid, true);
     }
-    else
+    else {
         setInterval(nextMove, SEARCH_TIME);
+    }
 
     // Press continue to keep playing if we win the game.
     setInterval(function() {
-        if (gameWon())
+        if (gameWon()) {
             keepPlaying();
+        }
     }, RETRY_TIME);
 
     // If AUTO_RETRY flag is set, print statistics and automatically retry after
@@ -89,8 +98,9 @@
 
                 var grid = getGrid();
                 var largestTile = 0;
-                for (var i = 0; i < grid.length; i++)
+                for (var i = 0; i < grid.length; i++) {
                     largestTile = Math.max(largestTile, grid[i]);
+                }
                 bestLargestTile = Math.max(bestLargestTile, largestTile);
 
                 averageScore = (averageScore * games + score) / (games + 1);
@@ -132,17 +142,23 @@
      * @return best move at root nodes, value of best move at other nodes.
      */
     function search(grid, depth, alpha, root) {
-        if (depth <= 0)
+        if (depth <= 0) {
             return evaluate(grid);
+        }
 
-        if (!search.table)
+        if (!search.table) {
             search.table = {};
+        }
 
+        // Look up game grid in the transposition table. 
         var key = getGridKey(grid);
         var entry = search.table[key];
-        if (entry && entry.depth >= depth && (!entry.isBound || entry.value <= alpha))
+        if (entry && entry.depth >= depth && (!entry.isBound || entry.value <= alpha)) {
             return root ? entry.move : entry.value;
+        }
 
+        // If there was a transposition entry and its value couldn't be used,
+        // at least move its best move to the front of the current move list. 
         var moves = [ MOVE_RIGHT, MOVE_DOWN, MOVE_LEFT, MOVE_UP ];
         if (entry) {
             var index = moves.indexOf(entry.move);
@@ -162,6 +178,10 @@
                 bestMove = bestMove || move;
                 var value = Number.POSITIVE_INFINITY;
 
+                // Try to put a 2 in each free square. Don't bother with 4s because
+                // it doesn't seem to make any significant difference. Iterate from
+                // the bottom right because that's the corner favoured; try to get
+                // a minimum value early to exit early from the loop.
                 for (var j = copyGrid.length - 1; j >= 0 && value > alpha; j--) {
                     if (!copyGrid[j]) {
                         copyGrid[j] = 2;
@@ -178,9 +198,11 @@
             }
         }
 
-        if (!bestMove)
+        if (!bestMove) {
             return root ? MOVE_LEFT : ACCEPT_DEFEAT_VALUE + evaluate(grid);
+        }
 
+        // Store search results in the transposition table.
         search.table[key] = {
             depth: depth,
             value: alpha,
@@ -210,36 +232,39 @@
                 var tile = get(grid, r, c);
                 if (!tile) {
                     numEmpty++;
+                    continue;
                 }
-                else {
-                    positionValue += tile * POSITION_VALUE[r * GRID_SIZE + c];
+                positionValue += tile * POSITION_VALUE[r * GRID_SIZE + c];
 
-                    if (c < GRID_SIZE - 1) {
-                        var adjTile = get(grid, r, c + 1);
-                        if (adjTile) {
-                            adjDiffValue += levelDifference(tile, adjTile) * Math.log(tile + adjTile);
+                // Perform pairwise comparisons.
+                if (c < GRID_SIZE - 1) {
+                    var adjTile = get(grid, r, c + 1);
+                    if (adjTile) {
+                        adjDiffValue += levelDifference(tile, adjTile) * Math.log(tile + adjTile);
 
-                            if (c < GRID_SIZE - 2) {
-                                var thirdTile = get(grid, r, c + 2);
-                                if (thirdTile && levelDifference(tile, thirdTile) <= 1.1) {
-                                    var smallerTile = Math.min(tile, thirdTile);
-                                    insulationValue += levelDifference(smallerTile, adjTile) * Math.log(smallerTile);
-                                }
+                        // Perform triplet comparisons.
+                        if (c < GRID_SIZE - 2) {
+                            var thirdTile = get(grid, r, c + 2);
+                            if (thirdTile && levelDifference(tile, thirdTile) <= 1.1) {
+                                var smallerTile = Math.min(tile, thirdTile);
+                                insulationValue += levelDifference(smallerTile, adjTile) * Math.log(smallerTile);
                             }
                         }
                     }
+                }
 
-                    if (r < GRID_SIZE - 1) {
-                        adjTile = get(grid, r + 1, c);
-                        if (adjTile) {
-                            adjDiffValue += levelDifference(tile, adjTile) * Math.log(tile + adjTile);
+                // Perform pairwise comparisons.
+                if (r < GRID_SIZE - 1) {
+                    adjTile = get(grid, r + 1, c);
+                    if (adjTile) {
+                        adjDiffValue += levelDifference(tile, adjTile) * Math.log(tile + adjTile);
 
-                            if (c < GRID_SIZE - 2) {
-                                var thirdTile = get(grid, r + 2, c);
-                                if (thirdTile && levelDifference(tile, thirdTile) <= 1.1) {
-                                    var smallerTile = Math.min(tile, thirdTile);
-                                    insulationValue += levelDifference(smallerTile, adjTile) * Math.log(smallerTile);
-                                }
+                        // Perform triplet comparisons.
+                        if (c < GRID_SIZE - 2) {
+                            var thirdTile = get(grid, r + 2, c);
+                            if (thirdTile && levelDifference(tile, thirdTile) <= 1.1) {
+                                var smallerTile = Math.min(tile, thirdTile);
+                                insulationValue += levelDifference(smallerTile, adjTile) * Math.log(smallerTile);
                             }
                         }
                     }
@@ -247,6 +272,8 @@
             }
         }
 
+        // Equation for log-like curve that starts at 0, ramps up quickly up
+        // to 10 at numEmpty = 5, and levels off nearly completed after that.
         var numEmptyValue = 11.12249 + (0.05735587 - 11.12249) / (1 + Math.pow((numEmpty / 2.480941), 2.717769));
 
         value += POSITION_WEIGHT * positionValue;
@@ -384,19 +411,23 @@
             }
         }
 
-        if (!anyMoved)
+        if (!anyMoved){
             return false;
+        }
 
         var numEmpty = 0;
         for (var i = 0; i < grid.length; i++) {
-            if (grid[i] < 0)
+            if (grid[i] < 0) {
                 grid[i] *= -1;
-            else if (!grid[i])
+            }
+            else if (!grid[i]) {
                 numEmpty++;
+            }
         }
 
-        if (numEmpty === 0)
+        if (numEmpty === 0){
             throw 'No empty squares after making move.';
+        }
 
         return true;
     }
